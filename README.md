@@ -1,45 +1,62 @@
-# YT Noter v2 — AI-Powered YouTube Notes
+# 🌑 YT Video to PDF Noter (Pro Noir Edition)
 
-## Quick Start
+**Professional-grade YouTube documentation tool with real-time automation, multi-video persistence, and "Noir Modern" PDF export.**
 
-### 1. Start Backend
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/badge/Version-4.9-3b82f6.svg)]()
+
+---
+
+## ✨ Features
+
+### 🎬 Documentation Engine
+- **Universal Timeline**: Keep notes from multiple videos in a single session. Smart title-detection automatically sections your timeline with blue headers.
+- **SNAP (Instant Capture)**: Manual high-resolution snapshots with a single click or `Alt+S`.
+- **LIVE (Auto-Snap)**: Set a custom interval (e.g., 30s) and let the engine document the video automatically with a breathing pulse animation.
+- **SCAN (Deep Skimmer)**: Deep-scan entire videos in seconds to create a visual index.
+
+### 🌑 Noir Design System
+- **Midnight Aesthetic**: Deep charcoal theme (`#0b0e14`) with neon blue accents.
+- **Glassmorphism**: Modern, translucent UI components that feel premium and integrated.
+- **Micro-Animations**: Smooth transitions, breathing pulses, and radar scanning effects.
+
+### 📄 Export & Security
+- **Noir PDF Engine**: Export professional "Dark Mode" reports with charcoal backgrounds and neon accents.
+- **Master Clear (Double-Lock)**: Intelligent safety guards that warn you twice if you haven't exported your notes yet.
+- **Ironclad Security**: 100% CSP-compliant architecture (Zero-String DOM construction) for total safety on YouTube.
+
+---
+
+## 🚀 Quick Start
+
+### 1. Backend Setup
 ```bash
 cd backend
 pip install -r requirements.txt
-export ANTHROPIC_API_KEY="sk-ant-your-key-here"
 python app.py
 ```
 
-### 2. Load Extension in Chrome
-- Go to `chrome://extensions`
-- Enable **Developer mode**
-- Click **Load unpacked**
-- Select the `extension/` folder
+### 2. Extension Installation
+1. Open Chrome and navigate to `chrome://extensions`.
+2. Enable **Developer Mode**.
+3. Click **Load Unpacked** and select the `extension` folder from this repo.
 
-### 3. Open Any YouTube Video
-- Click the **NOTES** handle on the right edge of screen
-- Or press **Alt+H** to toggle sidebar
+### 3. Documentation
+- Open any YouTube video.
+- Click the **"OPEN YT NOTER PRO"** button below the video title.
+- Start capturing!
 
-## Features
-| Feature | How |
-|---------|-----|
-| Screenshot | Click 📸 Snap or Alt+S |
-| AI AutoNote | Take screenshot → click 🤖 AutoNote |
-| OCR | Take screenshot → click 🔤 OCR |
-| AutoSnap | Click ⏱ AutoSnap (auto screenshots every N seconds) |
-| AI Summary | Click ✨ Summary |
-| Ghost mode | Click 👁 Ghost (sidebar becomes transparent) |
-| Export PDF | Click ⬇ PDF in footer |
-| Export MD  | Click ⬇ MD in footer |
+---
 
-## Keyboard Shortcuts
-| Shortcut | Action |
-|----------|--------|
-| Alt+S | Screenshot |
-| Alt+H | Toggle sidebar |
-| Alt+N | Focus note editor |
-| Alt+A | Toggle AutoSnap |
-| Alt+T | Insert timestamp in editor |
-| Alt+Enter | Save note |
+## 🛠 Tech Stack
+- **Frontend**: Pure Vanilla JS (Zero-String Architecture), CSS3 (Modern Flex/Grid).
+- **Backend**: Python Flask, CORS-enabled.
+- **PDF Engine**: FPDF2 & Pillow (High-DPI Noir Rendering).
 
-## Needs ANTHROPIC_API_KEY for: AutoNote, OCR, Summary
+---
+
+## 📜 License
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+---
+*Developed with 💙 by Ravi Prakash.*
