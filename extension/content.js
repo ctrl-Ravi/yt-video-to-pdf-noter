@@ -157,7 +157,7 @@ async function ytnSnap(autoSave = false) {
   canvas.width = v.videoWidth; canvas.height = v.videoHeight;
   canvas.getContext("2d").drawImage(v, 0, 0, canvas.width, canvas.height);
   const data = canvas.toDataURL("image/png");
-  if (autoSave) await ytnSave(data, `Captured at ${formatTime(v.currentTime)}`);
+  if (autoSave) await ytnSave(data, "");
   return data;
 }
 
@@ -190,7 +190,7 @@ async function ytnToggleSkimmer() {
     const v = getVideo(); if (!v) return;
     while (isScanning && v.currentTime < v.duration - 1) {
       const img = await ytnSnap();
-      if (img) await ytnSave(img, `Scan Point: ${formatTime(v.currentTime)}`);
+      if (img) await ytnSave(img, "");
       v.currentTime += interval;
       const prog = document.getElementById("ytn-progress");
       if (prog) prog.style.width = (v.currentTime/v.duration * 100) + "%";
@@ -278,9 +278,11 @@ function renderNotes() {
       card.appendChild(img);
       fetchImage(n.image_path, `img-${n.id}`);
     }
-    const noteTxt = el("div"); noteTxt.style = "font-size:13px;line-height:1.5;color:#fff";
-    noteTxt.textContent = n.note || "";
-    card.appendChild(noteTxt);
+    if (n.note) {
+      const noteTxt = el("div"); noteTxt.style = "font-size:13px;line-height:1.5;color:#fff;margin-top:10px";
+      noteTxt.textContent = n.note;
+      card.appendChild(noteTxt);
+    }
     entry.append(dot, card);
     list.appendChild(entry);
   });
