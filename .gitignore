@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+.env
+.vscode/
+screenshots/
+notes.json
+backend/screenshots/
+backend/notes.json

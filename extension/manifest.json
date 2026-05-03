@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "YT Noter Pro — Motion Design",
+  "version": "3.2",
+  "description": "Professional high-performance manual YouTube notes with motion design and Full Video Scanner.",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.youtube.com/*",
+    "http://localhost:5001/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.youtube.com/*"],
+      "js": ["content.js"],
+      "css": ["sidebar.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "icons": {
+    "48": "icons/icon48.png"
+  },
+  "commands": {
+    "toggle-sidebar": {
+      "suggested_key": { "default": "Alt+H" },
+      "description": "Toggle sidebar"
+    },
+    "take-screenshot": {
+      "suggested_key": { "default": "Alt+S" },
+      "description": "Take screenshot"
+    }
+  }
+}
