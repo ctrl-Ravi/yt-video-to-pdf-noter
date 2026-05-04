@@ -2,6 +2,7 @@ import os, json, datetime, io, base64, uuid, re
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from fpdf import FPDF
+from fpdf.enums import XPos, YPos
 from PIL import Image
 
 app = Flask(__name__)
@@ -10,6 +11,11 @@ CORS(app)
 DB_PATH = "notes.json"
 IMG_DIR = "screenshots"
 if not os.path.exists(IMG_DIR): os.makedirs(IMG_DIR)
+
+def safe_text(text):
+    if not text: return ""
+    # FPDF default fonts only support latin-1. This strips unsupported chars to prevent crash.
+    return text.encode("latin-1", "ignore").decode("latin-1")
 
 def load_notes():
     if not os.path.exists(DB_PATH): return []
@@ -116,10 +122,10 @@ def export_pdf():
     # Header
     pdf.set_font("Helvetica", "B", 24)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 20, "YT NOTER PRO", ln=True, align="C")
+    pdf.cell(0, 20, "YT NOTER PRO", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_text_color(59, 130, 246)
-    pdf.cell(0, 10, "OFFICIAL DOCUMENTATION REPORT", ln=True, align="C")
+    pdf.cell(0, 10, "OFFICIAL DOCUMENTATION REPORT", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
     pdf.ln(10)
 
     # Group by Video
@@ -132,14 +138,14 @@ def export_pdf():
         pdf.set_draw_color(59, 130, 246)
         pdf.set_text_color(255, 255, 255)
         pdf.set_font("Helvetica", "B", 14)
-        pdf.cell(0, 12, f"  {title}", border="L", ln=True, fill=True)
+        pdf.cell(0, 12, f"  {safe_text(title)}", border="L", new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True)
         pdf.ln(5)
 
         for n in vnotes:
             # Timestamp
             pdf.set_font("Helvetica", "B", 10)
             pdf.set_text_color(59, 130, 246)
-            pdf.cell(0, 8, f"Timestamp: {n.get('timestamp','00:00')}", ln=True)
+            pdf.cell(0, 8, f"Timestamp: {safe_text(n.get('timestamp','00:00'))}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
             # Image
             if n.get("image_path") and os.path.exists(n["image_path"]):
@@ -156,7 +162,7 @@ def export_pdf():
             if n.get("note"):
                 pdf.set_font("Helvetica", "", 11)
                 pdf.set_text_color(230, 230, 230)
-                pdf.multi_cell(0, 6, n["note"])
+                pdf.multi_cell(0, 6, safe_text(n["note"]))
             
             pdf.ln(10)
             pdf.set_draw_color(40, 40, 40)
