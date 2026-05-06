@@ -50,7 +50,7 @@ def save():
     notes = load_notes()
     notes.append(entry)
     save_notes(notes)
-    return jsonify({"status": "saved", "id": entry["id"]})
+    return jsonify({"status": "saved", "entry": entry})
 
 @app.route("/notes")
 def get_notes():
@@ -61,7 +61,10 @@ def get_notes():
 
 @app.route("/delete", methods=["POST"])
 def delete_single():
-    note_id = request.json.get("id")
+    data = request.json or {}
+    note_id = data.get("id")
+    if not note_id:
+        return jsonify({"error": "Missing id"}), 400
     notes = load_notes()
     new_notes = []
     for n in notes:

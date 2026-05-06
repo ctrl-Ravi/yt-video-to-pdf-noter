@@ -203,13 +203,65 @@ async function ytnToggleSkimmer() {
 async function ytnSave(img, text) {
   try {
     const title = (document.title || "YouTube").replace(" - YouTube", "");
-    await fetch(`${BACKEND}/save`, {
+    const response = await fetch(`${BACKEND}/save`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ note: text, image: img || "", timestamp: formatTime(getVideo()?.currentTime), video_url: window.location.href, video_title: title }),
       mode: 'cors'
     });
-    loadNotes();
+    const data = await response.json();
+    if (data.entry) {
+      notes.push(data.entry);
+      addNoteToDOM(data.entry);
+    }
   } catch (e) { console.error("YT NOTER: Save Failed", e); }
+}
+
+function addNoteToDOM(n) {
+  const list = document.getElementById("ytn-timeline-list");
+  if (!list) return;
+  
+  if (list.textContent === "Waiting for documentation...") {
+    list.innerHTML = "";
+  }
+
+  // Check if we need a new title header at the top
+  const firstHeader = list.querySelector(".ytn-timeline-section-header");
+  if (!firstHeader || firstHeader.textContent !== (n.video_title || "General Session")) {
+    const header = el("div", "ytn-timeline-section-header");
+    header.style = "padding: 20px 0 10px; font-size: 11px; color: var(--accent-blue); font-weight: 800; border-bottom: 1px solid var(--border); margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px";
+    header.textContent = n.video_title || "General Session";
+    list.insertBefore(header, list.firstChild);
+  }
+
+  const entry = el("div", "ytn-entry");
+  entry.id = `ytn-entry-${n.id}`;
+  const card = el("div", "ytn-entry-card");
+  const dot = el("div", "ytn-entry-dot");
+  const ts = el("span"); ts.style = "color:var(--accent-blue);font-weight:800;font-size:12px;display:block;margin-bottom:8px";
+  ts.textContent = n.timestamp;
+  const delBtn = el("div", "ytn-del-note"); delBtn.innerHTML = ICONS.trash;
+  delBtn.addEventListener("click", () => ytnDeleteNote(n.id));
+  card.append(ts, delBtn);
+  
+  if (n.image_path) {
+    const img = el("img", "ytn-entry-img", `img-${n.id}`);
+    img.src = `${BACKEND}/screenshot/${encodeURIComponent(n.image_path)}`;
+    card.appendChild(img);
+  }
+  if (n.note) {
+    const noteTxt = el("div"); noteTxt.style = "font-size:13px;line-height:1.5;color:#fff;margin-top:10px";
+    noteTxt.textContent = n.note;
+    card.appendChild(noteTxt);
+  }
+  entry.append(dot, card);
+  
+  // Insert exactly after the first header so it stays under its video title
+  const activeHeader = list.querySelector(".ytn-timeline-section-header");
+  if (activeHeader && activeHeader.nextSibling) {
+    list.insertBefore(entry, activeHeader.nextSibling);
+  } else {
+    list.appendChild(entry);
+  }
 }
 
 async function ytnSaveText() {
@@ -239,7 +291,23 @@ async function ytnClearAll() {
 async function ytnDeleteNote(id) {
   try {
     await fetch(`${BACKEND}/delete`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: id }), mode: 'cors' });
-    loadNotes();
+    const el = document.getElementById(`ytn-entry-${id}`);
+    if (el) el.remove();
+    notes = notes.filter(n => n.id !== id);
+    
+    const list = document.getElementById("ytn-timeline-list");
+    if (list) {
+      if (notes.length === 0) {
+        list.textContent = "Waiting for documentation...";
+      } else {
+        // Clean up empty headers if their last remaining note was deleted
+        list.querySelectorAll(".ytn-timeline-section-header").forEach(h => {
+          if (!h.nextElementSibling || h.nextElementSibling.classList.contains("ytn-timeline-section-header")) {
+            h.remove();
+          }
+        });
+      }
+    }
   } catch (e) {}
 }
 
@@ -265,6 +333,7 @@ function renderNotes() {
       lastTitle = n.video_title;
     }
     const entry = el("div", "ytn-entry");
+    entry.id = `ytn-entry-${n.id}`;
     const card = el("div", "ytn-entry-card");
     const dot = el("div", "ytn-entry-dot");
     const ts = el("span"); ts.style = "color:var(--accent-blue);font-weight:800;font-size:12px;display:block;margin-bottom:8px";
@@ -274,9 +343,8 @@ function renderNotes() {
     card.append(ts, delBtn);
     if (n.image_path) {
       const img = el("img", "ytn-entry-img", `img-${n.id}`);
-      img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+      img.src = `${BACKEND}/screenshot/${encodeURIComponent(n.image_path)}`;
       card.appendChild(img);
-      fetchImage(n.image_path, `img-${n.id}`);
     }
     if (n.note) {
       const noteTxt = el("div"); noteTxt.style = "font-size:13px;line-height:1.5;color:#fff;margin-top:10px";
@@ -286,14 +354,6 @@ function renderNotes() {
     entry.append(dot, card);
     list.appendChild(entry);
   });
-}
-
-async function fetchImage(path, imgId) {
-  try {
-    const res = await fetch(`${BACKEND}/screenshot/${encodeURIComponent(path)}`, { mode: 'cors' });
-    const blob = await res.blob();
-    const img = document.getElementById(imgId); if (img) img.src = URL.createObjectURL(blob);
-  } catch (e) {}
 }
 
 function ytnToggle() { if (sidebar) { sidebarVisible = !sidebarVisible; sidebar.classList.toggle("hidden", !sidebarVisible); } }
