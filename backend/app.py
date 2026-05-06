@@ -175,7 +175,7 @@ def export_pdf():
     buf = io.BytesIO()
     pdf.output(buf)
     buf.seek(0)
-    return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name="Noir_Study_Report.pdf")
+    return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name="Pelupa_Study_Report.pdf")
 
 @app.route("/export-md")
 def export_md():
@@ -190,7 +190,7 @@ def export_md():
             if n.get("note"): lines.append(n["note"] + "\n")
             lines.append("\n---\n")
     buf = io.BytesIO("\n".join(lines).encode())
-    return send_file(buf, mimetype="text/markdown", as_attachment=True, download_name="Noir_Notes.md")
+    return send_file(buf, mimetype="text/markdown", as_attachment=True, download_name="Pelupa_Notes.md")
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
