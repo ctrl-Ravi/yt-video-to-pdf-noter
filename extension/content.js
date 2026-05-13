@@ -16,6 +16,7 @@ const ICONS = {
   logo:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#09090b" stroke-width="2.8"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
   logoNative: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e4f42e" stroke-width="2.8"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`,
   note:  `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
+  grip:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>`,
 };
 
 function init() {
@@ -27,6 +28,7 @@ function init() {
     if (titleEl) titleEl.textContent = getVideoTitle();
   }
   injectNativeToggle();
+  setupFullscreenListener();
 }
 
 function el(tag, className, id) {
@@ -52,10 +54,15 @@ function injectNativeToggle() {
 function injectSidebar() {
   sidebar = el("div", null, "ytn-sidebar");
 
+  // Resize Handles
+  const resizeL = el("div", "ytn-resize-l");
+  const resizeBL = el("div", "ytn-resize-bl");
+  sidebar.append(resizeL, resizeBL);
+
   // ─ Header ─
   const header = el("div", "ytn-header");
 
-  // Top row: logo + title + close
+  // Top row: logo + title + toggles
   const headerTop = el("div", "ytn-header-top");
   const logoRow   = el("div", "ytn-logo-row");
   const logoBadge = el("div", "ytn-logo-badge");
@@ -66,10 +73,22 @@ function injectSidebar() {
   titleWrap.append(logoBadge, titleEl, versionEl);
   logoRow.appendChild(titleWrap);
 
-  const closeBtn = el("div", "ytn-close-btn", "ytn-close-icon");
-  closeBtn.innerHTML = ICONS.close;
-  closeBtn.title = "Hide sidebar";
-  headerTop.append(logoRow, closeBtn);
+  const togglesWrap = el("div", "ytn-header-toggles");
+  
+  const dragHandle = el("div", "ytn-drag-grip", "ytn-drag-handle");
+  dragHandle.innerHTML = ICONS.grip;
+  dragHandle.title = "Drag to reposition";
+
+  const autoToggle = el("div", "ytn-auto-toggle", "ytn-auto-pill");
+  autoToggle.innerHTML = `<div class="ytn-toggle-dot"></div><span>AUTO</span>`;
+  autoToggle.title = "Toggle Auto Snap";
+
+  const hideBtn = el("div", "ytn-hide-btn", "ytn-hide-icon");
+  hideBtn.innerHTML = ICONS.close;
+  hideBtn.title = "Hide sidebar";
+
+  togglesWrap.append(dragHandle, autoToggle, hideBtn);
+  headerTop.append(logoRow, togglesWrap);
 
   // Notebook selector
   const nbWrap    = el("div", "ytn-nb-wrap");
@@ -140,13 +159,32 @@ function injectSidebar() {
 
   document.body.appendChild(sidebar);
 
+  // ── Restore State ──
+  chrome.storage.local.get(["ytn_pos", "ytn_size"], (res) => {
+    if (res.ytn_pos) {
+      sidebar.style.right = "auto";
+      sidebar.style.left = res.ytn_pos.x + "px";
+      sidebar.style.top = res.ytn_pos.y + "px";
+    }
+    if (res.ytn_size) {
+      sidebar.style.width = res.ytn_size.w + "px";
+      sidebar.style.height = res.ytn_size.h + "px";
+      checkCompact(res.ytn_size.w);
+    }
+  });
+
   // ── Wire up events ──
-  closeBtn.addEventListener("click", ytnToggle);
+  hideBtn.addEventListener("click", ytnToggle);
+  autoToggle.addEventListener("click", ytnToggleAuto);
   snapBtn.addEventListener("click", () => ytnSnap(true));
   autoBtn.addEventListener("click", ytnToggleAuto);
   scanBtn.addEventListener("click", ytnToggleSkimmer);
   saveBtn.addEventListener("click", ytnSaveText);
   clearBtn.addEventListener("click", ytnClearAll);
+
+  dragHandle.addEventListener("pointerdown", ytnStartDrag);
+  resizeL.addEventListener("mousedown", e => ytnStartResize(e, "w"));
+  resizeBL.addEventListener("mousedown", e => ytnStartResize(e, "wh"));
 
   nbSelect.addEventListener("change", (e) => {
     currentNotebook = e.target.value;
@@ -169,6 +207,182 @@ function injectSidebar() {
   exitBtn.addEventListener("click", ytnToggle);
 
   loadNotebooks();
+}
+
+// ── Interaction Logic ────────────────────────────────
+let dragRAF = null;
+function ytnStartDrag(e) {
+  // Only allow left mouse button or touch
+  if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+  e.preventDefault();
+  const handle = e.currentTarget;
+  handle.setPointerCapture(e.pointerId);
+
+  const rect = sidebar.getBoundingClientRect();
+  sidebar.style.right = "auto";
+  sidebar.style.bottom = "auto";
+  sidebar.style.left = rect.left + "px";
+  sidebar.style.top = rect.top + "px";
+
+  const startX = e.clientX;
+  const startY = e.clientY;
+  let currentDeltaX = 0;
+  let currentDeltaY = 0;
+
+  function onPointerMove(e) {
+    currentDeltaX = e.clientX - startX;
+    currentDeltaY = e.clientY - startY;
+
+    if (!dragRAF) {
+      dragRAF = requestAnimationFrame(() => {
+        // Clamping check for the final position (preview)
+        let targetX = rect.left + currentDeltaX;
+        let targetY = rect.top + currentDeltaY;
+        
+        targetX = Math.max(0, Math.min(window.innerWidth - sidebar.offsetWidth, targetX));
+        targetY = Math.max(0, Math.min(window.innerHeight - sidebar.offsetHeight, targetY));
+
+        const clampedDeltaX = targetX - rect.left;
+        const clampedDeltaY = targetY - rect.top;
+
+        sidebar.style.transform = `translate(${clampedDeltaX}px, ${clampedDeltaY}px)`;
+        dragRAF = null;
+      });
+    }
+  }
+
+  function onPointerUp(e) {
+    handle.releasePointerCapture(e.pointerId);
+    handle.removeEventListener("pointermove", onPointerMove);
+    handle.removeEventListener("pointerup", onPointerUp);
+    
+    if (dragRAF) {
+      cancelAnimationFrame(dragRAF);
+      dragRAF = null;
+    }
+
+    const finalRect = sidebar.getBoundingClientRect();
+    sidebar.style.transform = "none";
+    sidebar.style.left = finalRect.left + "px";
+    sidebar.style.top = finalRect.top + "px";
+
+    try {
+      if (chrome && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ ytn_pos: { x: finalRect.left, y: finalRect.top } });
+      }
+    } catch (e) {
+      console.warn("YT Noter: Failed to save position", e);
+    }
+  }
+
+  handle.addEventListener("pointermove", onPointerMove);
+  handle.addEventListener("pointerup", onPointerUp);
+}
+
+function ytnStartResize(e, mode) {
+  e.preventDefault();
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const startWidth = sidebar.offsetWidth;
+  const startHeight = sidebar.offsetHeight;
+  const startLeft = sidebar.offsetLeft;
+
+  function onMouseMove(e) {
+    if (mode.includes("w")) {
+      const deltaX = startX - e.clientX;
+      let newWidth = startWidth + deltaX;
+      newWidth = Math.max(300, Math.min(640, newWidth));
+      
+      const actualDelta = newWidth - startWidth;
+      sidebar.style.left = (startLeft - actualDelta) + "px";
+      sidebar.style.width = newWidth + "px";
+      checkCompact(newWidth);
+    }
+    if (mode.includes("h")) {
+      const deltaY = e.clientY - startY;
+      let newHeight = startHeight + deltaY;
+      newHeight = Math.max(200, Math.min(window.innerHeight - sidebar.offsetTop, newHeight));
+      sidebar.style.height = newHeight + "px";
+    }
+  }
+
+  function onMouseUp() {
+    document.removeEventListener("mousemove", onMouseMove);
+    document.removeEventListener("mouseup", onMouseUp);
+    const r = sidebar.getBoundingClientRect();
+    try {
+      if (chrome && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ 
+          ytn_size: { w: r.width, h: r.height },
+          ytn_pos: { x: r.left, y: r.top }
+        });
+      }
+    } catch (e) {
+      console.warn("YT Noter: Failed to save size", e);
+    }
+  }
+
+  document.addEventListener("mousemove", onMouseMove);
+  document.addEventListener("mouseup", onMouseUp);
+}
+
+function checkCompact(width) {
+  sidebar.classList.toggle("ytn-compact", width < 320);
+}
+
+function setupFullscreenListener() {
+  const handler = () => {
+    if (!sidebar) return;
+    const isFullscreen = !!document.fullscreenElement;
+    sidebar.classList.toggle("ytn-fullscreen", isFullscreen);
+    
+    if (isFullscreen) {
+      // We entered fullscreen: inject our control button if it's not there
+      injectFullscreenControl();
+    } else {
+      // Exited fullscreen: clean up forced state
+      sidebar.classList.remove("ytn-force-expand");
+    }
+  };
+  document.addEventListener("fullscreenchange", handler);
+  document.addEventListener("webkitfullscreenchange", handler);
+}
+
+function injectFullscreenControl() {
+  const rightControls = document.querySelector(".ytp-right-controls");
+  if (!rightControls || document.getElementById("ytn-fs-toggle")) return;
+
+  // Query the settings button *inside* the specific controls container we found
+  const settingsBtn = rightControls.querySelector(".ytp-settings-button");
+
+  const btn = document.createElement("button");
+  btn.id = "ytn-fs-toggle";
+  btn.className = "ytp-button";
+  btn.setAttribute("aria-label", "Toggle YT Noter");
+  btn.setAttribute("title", "Toggle YT Noter");
+  btn.style.verticalAlign = "top";
+  
+  // Use a simple clean SVG for the button
+  btn.innerHTML = `<svg height="100%" version="1.1" viewBox="0 0 36 36" width="100%">
+    <path fill="currentColor" d="M11,11 h14 v14 h-14 z" stroke="currentColor" stroke-width="2" fill-opacity="0"></path>
+    <path fill="currentColor" d="M14,14 h8 v2 h-8 z M14,18 h6 v2 h-6 z"></path>
+  </svg>`;
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (sidebar) {
+      sidebar.classList.toggle("ytn-force-expand");
+    }
+  });
+
+  // Insert safely: use settingsBtn.parentNode to guarantee they share a parent,
+  // or fallback to appending to rightControls if settingsBtn isn't found.
+  if (settingsBtn && settingsBtn.parentNode) {
+    settingsBtn.parentNode.insertBefore(btn, settingsBtn);
+  } else {
+    rightControls.appendChild(btn);
+  }
 }
 
 // ── Card & Button Builders ───────────────────────────
@@ -208,6 +422,16 @@ function formatTime(s) { s = Math.floor(s || 0); return `${String(Math.floor(s/6
 
 async function ytnSnap(autoSave = false) {
   const v = getVideo(); if (!v) return;
+  
+  // Show flash animation if grabbing a snapshot while in fullscreen
+  if (document.fullscreenElement) {
+    const flash = document.createElement("div");
+    flash.className = "ytn-glow-overlay";
+    const container = document.fullscreenElement || document.body;
+    container.appendChild(flash);
+    setTimeout(() => { flash.remove(); }, 700); // remove after animation completes
+  }
+  
   const canvas = document.createElement("canvas");
   canvas.width = v.videoWidth; canvas.height = v.videoHeight;
   canvas.getContext("2d").drawImage(v, 0, 0, canvas.width, canvas.height);
@@ -218,14 +442,19 @@ async function ytnSnap(autoSave = false) {
 
 function ytnToggleAuto() {
   const btn   = document.getElementById("ytn-auto-btn");
+  const pill  = document.getElementById("ytn-auto-pill");
   const input = document.getElementById("ytn-auto-btn-timer");
   if (autoSnapInterval) {
     clearInterval(autoSnapInterval); autoSnapInterval = null;
-    btn.classList.remove("active"); if (input) input.disabled = false;
+    btn.classList.remove("active"); 
+    pill.classList.remove("active");
+    if (input) input.disabled = false;
     const prog = document.getElementById("ytn-progress");
     if (prog) prog.style.width = "0%";
   } else {
-    btn.classList.add("active"); if (input) input.disabled = true; autoSnapTimer = 0;
+    btn.classList.add("active");
+    pill.classList.add("active");
+    if (input) input.disabled = true; autoSnapTimer = 0;
     const interval = parseInt(input?.value) || 30;
     autoSnapInterval = setInterval(async () => {
       autoSnapTimer++;
@@ -418,8 +647,12 @@ function renderNotes() {
 // ── Sidebar Toggle & Shortcuts ────────────────────────
 function ytnToggle() {
   if (sidebar) {
-    sidebarVisible = !sidebarVisible;
-    sidebar.classList.toggle("hidden", !sidebarVisible);
+    if (document.fullscreenElement && sidebar.classList.contains("ytn-force-expand")) {
+      sidebar.classList.remove("ytn-force-expand");
+    } else {
+      sidebarVisible = !sidebarVisible;
+      sidebar.classList.toggle("hidden", !sidebarVisible);
+    }
   }
 }
 

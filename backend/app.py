@@ -243,7 +243,14 @@ def export_pdf():
     buf = io.BytesIO()
     pdf.output(buf)
     buf.seek(0)
-    return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name="Pelupa_Study_Report.pdf")
+    
+    filename = "Pelupa_Study_Report.pdf"
+    if notebook_name:
+        safe_name = "".join(c for c in notebook_name if c.isalnum() or c in (' ', '-', '_')).strip()
+        if safe_name:
+            filename = f"{safe_name}.pdf"
+            
+    return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=filename)
 
 @app.route("/export-md")
 def export_md():
@@ -282,7 +289,14 @@ def export_md():
             lines.append("---")
             lines.append("")
     buf = io.BytesIO("\n".join(lines).encode("utf-8"))
-    return send_file(buf, mimetype="text/markdown", as_attachment=True, download_name="YTNoterPro_Notes.md")
+    
+    filename = "YTNoterPro_Notes.md"
+    if notebook_name:
+        safe_name = "".join(c for c in notebook_name if c.isalnum() or c in (' ', '-', '_')).strip()
+        if safe_name:
+            filename = f"{safe_name}.md"
+            
+    return send_file(buf, mimetype="text/markdown", as_attachment=True, download_name=filename)
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
