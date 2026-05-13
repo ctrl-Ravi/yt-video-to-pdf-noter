@@ -429,7 +429,7 @@ async function ytnSnap(autoSave = false) {
     flash.className = "ytn-glow-overlay";
     const container = document.fullscreenElement || document.body;
     container.appendChild(flash);
-    setTimeout(() => { flash.remove(); }, 700); // remove after animation completes
+    setTimeout(() => { flash.remove(); }, 1000); // remove after animation completes
   }
   
   const canvas = document.createElement("canvas");
