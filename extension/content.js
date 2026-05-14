@@ -40,14 +40,34 @@ function el(tag, className, id) {
 
 // ── Native Toggle ─────────────────────────────────────
 function injectNativeToggle() {
-  const target = document.querySelector("#title h1.ytd-watch-metadata") ||
-                 document.querySelector("ytd-video-primary-info-renderer #title");
-  if (!target || document.getElementById("ytn-native-toggle")) return;
+  const tryInject = () => {
+    // Look for the title element that is actually visible (not hidden by YouTube's SPA logic)
+    const targets = Array.from(document.querySelectorAll("h1.ytd-watch-metadata, ytd-video-primary-info-renderer #title"));
+    const activeTarget = targets.find(t => t.offsetWidth > 0 && t.offsetHeight > 0);
+    
+    if (!activeTarget) return false;
 
-  const toggle = el("div", "ytn-native-toggle", "ytn-native-toggle");
-  toggle.innerHTML = `${ICONS.logoNative}<span>OPEN YT NOTER PRO</span>`;
-  toggle.addEventListener("click", ytnToggle);
-  target.parentElement.appendChild(toggle);
+    // If this specific active target already has the toggle, we are good.
+    if (activeTarget.parentElement.querySelector("#ytn-native-toggle")) return true;
+
+    // Clean up any old toggles to avoid duplicates in the SPA
+    document.querySelectorAll("#ytn-native-toggle").forEach(e => e.remove());
+
+    const toggle = el("div", "ytn-native-toggle", "ytn-native-toggle");
+    toggle.innerHTML = `${ICONS.logoNative}<span>OPEN YT NOTER PRO</span>`;
+    toggle.addEventListener("click", ytnToggle);
+    activeTarget.parentElement.appendChild(toggle);
+    return true;
+  };
+
+  if (!tryInject()) {
+    const observer = new MutationObserver((mutations, obs) => {
+      if (tryInject()) {
+        obs.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
 }
 
 // ── Sidebar Shell ─────────────────────────────────────
@@ -343,6 +363,12 @@ function setupFullscreenListener() {
     if (isFullscreen) {
       // We entered fullscreen: inject our control button if it's not there
       injectFullscreenControl();
+      
+      // If the sidebar was fully hidden in normal mode, reveal it so the fullscreen pill works
+      if (!sidebarVisible) {
+        sidebarVisible = true;
+        sidebar.classList.remove("hidden");
+      }
     } else {
       // Exited fullscreen: clean up forced state
       sidebar.classList.remove("ytn-force-expand");
@@ -678,7 +704,7 @@ init();
 
 // Use YouTube's native SPA navigation event instead of a heavy MutationObserver
 document.addEventListener("yt-navigate-finish", () => {
-  if (!document.getElementById("ytn-sidebar") && window.location.pathname === '/watch') {
+  if (window.location.pathname === '/watch') {
     init();
   }
 });
