@@ -31,6 +31,17 @@
 
 ### 1. Backend Setup
 ```bash
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+
+# Windows (PowerShell)
+venv\Scripts\Activate.ps1
+
+# Windows (CMD)
+venv\Scripts\activate.bat
+
 cd backend
 pip install -r requirements.txt
 python app.py
