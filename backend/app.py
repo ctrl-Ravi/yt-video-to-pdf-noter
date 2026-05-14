@@ -24,6 +24,16 @@ def clean_title(title):
     title = re.sub(r'\s*-\s*YouTube\s*$', '', title, flags=re.IGNORECASE)  # strip trailing suffix
     return title.strip() or "General Session"
 
+def timestamp_to_seconds(ts):
+    """Convert MM:SS or HH:MM:SS to total seconds."""
+    if not ts: return 0
+    parts = ts.split(':')
+    try:
+        if len(parts) == 3: # HH:MM:SS
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+        return int(parts[0]) * 60 + int(parts[1])
+    except: return 0
+
 def load_notes():
     if not os.path.exists(DB_PATH): return []
     with open(DB_PATH, "r") as f: return json.load(f)
@@ -182,63 +192,130 @@ def export_pdf():
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    # ── Cover header ────────────────────────────────────────────────────────
-    pdf.set_font("Helvetica", "B", 22)
-    pdf.set_text_color(*_PDF_WHITE)
-    pdf.cell(0, 18, "YT NOTER PRO", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
-
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.set_text_color(*_PDF_ACCENT)
-    nb_label = safe_text(notebook_name or "All Notebooks")
-    pdf.cell(0, 8, f"NOTEBOOK: {nb_label.upper()}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
-
-    pdf.set_font("Helvetica", "", 8)
-    pdf.set_text_color(*_PDF_FADED)
-    pdf.cell(0, 7, f"Generated {datetime.datetime.now().strftime('%d %b %Y, %H:%M')}",
-             new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
-    pdf.ln(10)
-
-    # Group by Video
+    # Group by Video FIRST so we can use it for stats
     grouped = {}
     for n in notes: grouped.setdefault(n.get("video_title", "General Notes"), []).append(n)
 
+    # ── Centered Premium Header Block (Ultra-Compact) ───────────────────────
+    # Primary Title: Notebook Name
+    pdf.set_font("Helvetica", "B", 22)
+    pdf.set_text_color(*_PDF_WHITE)
+    pdf.cell(0, 10, safe_text(notebook_name or "General Session").upper(), new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+    
+    # Subtitle
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(59, 130, 246) # #3B82F6 Blue
+    pdf.cell(0, 5, "STUDY DOCUMENTATION ENGINE", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+    
+    # ── Pro Ribbon Stats (Minimalist) ───────────────────────────────────────
+    pdf.ln(1)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(100, 116, 139) # Slate Gray
+    
+    v_count = len(grouped.keys())
+    n_count = len(notes)
+    date_str = datetime.datetime.now().strftime("%d %b %Y").upper()
+    
+    stats_line = f"{v_count} VIDEOS   |   {n_count} CAPTURES   |   {date_str}"
+    pdf.cell(0, 5, stats_line, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+    
+    # Subtle Divider
+    pdf.set_draw_color(*_PDF_BORDER)
+    pdf.set_line_width(0.1)
+    pdf.line(60, pdf.get_y() + 2, 150, pdf.get_y() + 2)
+    
+    pdf.ln(8) # Compact jump to content
+
     for title, vnotes in grouped.items():
-        # ── Video section heading ────────────────────────────────────────────
-        pdf.set_fill_color(*_PDF_SURFACE)
-        pdf.set_draw_color(*_PDF_ACCENT)
+        # ── Video Section Header (Responsive Styled Block) ──
+        if pdf.get_y() > 220: pdf.add_page()
+        pdf.ln(5)
+        video_url = vnotes[0].get("video_url", "")
+        
+        # Responsive Font Scaling
+        title_text = safe_text(title).upper()
+        font_size = 11
+        line_height = 5
+        
+        # If title is longer than 170mm, decrease font size and line height
+        if pdf.get_string_width(title_text) > 170:
+            font_size = 9
+            line_height = 4 # Tighter line height for smaller font
+        
+        pdf.set_font("Helvetica", "B", font_size)
+        start_y = pdf.get_y()
+        
+        # Use multi_cell to calculate height
+        pdf.set_text_color(*_PDF_BG) 
+        pdf.set_xy(20, start_y + 1.5)
+        pdf.multi_cell(170, line_height, title_text, border=0, align='L')
+        
+        end_y = pdf.get_y()
+        # Reduce padding and min-height for a "sleeker" box
+        block_height = max(10, (end_y - start_y) + 3) 
+        
+        # Draw the Container Decoration
+        pdf.set_xy(15, start_y)
+        pdf.set_fill_color(17, 24, 39)
+        pdf.rect(15, start_y, 180, block_height, "F")
+        pdf.set_fill_color(59, 130, 246)
+        pdf.rect(15, start_y, 1.5, block_height, "F")
+        
+        # Draw the Actual Text
+        pdf.set_xy(20, start_y + 1.5)
         pdf.set_text_color(*_PDF_WHITE)
-        pdf.set_font("Helvetica", "B", 12)
-        pdf.cell(0, 11, f"  {safe_text(title)}", border="L", new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True)
-        pdf.ln(6)
+        pdf.multi_cell(170, line_height, title_text, border=0, align='L', link=video_url)
+        
+        pdf.set_y(start_y + block_height + 6) # Reduced margin bottom
 
         for n in vnotes:
-            # Timestamp chip
-            pdf.set_font("Helvetica", "B", 9)
-            pdf.set_text_color(*_PDF_ACCENT)
-            pdf.cell(0, 7, f"@ {safe_text(n.get('timestamp', '00:00'))}",
-                     new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            # Check for page break before starting a new note card
+            if pdf.get_y() > 220: pdf.add_page()
 
-            # Screenshot
+            # Note Card Start
+            start_y = pdf.get_y()
+            
+            # 1. Timestamp / Link
+            ts = n.get('timestamp', '00:00')
+            v_url = n.get('video_url', '')
+            seconds = timestamp_to_seconds(ts)
+            deep_link = f"{v_url}&t={seconds}" if v_url else ""
+            
+            pdf.set_font("Helvetica", "B", 10)
+            pdf.set_text_color(*_PDF_ACCENT)
+            pdf.cell(0, 8, f"TIMESTAMP: {safe_text(ts)}", new_x=XPos.LMARGIN, new_y=YPos.NEXT, link=deep_link)
+
+            # 2. Snapshot (The Hero - Full Width)
             if n.get("image_path") and os.path.exists(n["image_path"]):
                 try:
                     img = Image.open(n["image_path"])
                     w, h = img.size
-                    dw = 170; dh = dw * (h / w)
-                    if pdf.get_y() + dh + 10 > 270: pdf.add_page()
-                    pdf.image(n["image_path"], x=20, w=dw, h=dh)
+                    max_w = 180
+                    max_h = 100 
+                    
+                    # Calculate aspect ratio scaling
+                    ratio = min(max_w / w, max_h / h)
+                    dw = w * ratio
+                    dh = h * ratio
+                    
+                    # Center the image
+                    x_pos = (210 - dw) / 2
+                    pdf.image(n["image_path"], x=x_pos, w=dw, h=dh)
                     pdf.ln(4)
                 except: pass
 
-            # Note body
+            # 3. Note Text (Underneath)
             if n.get("note"):
-                pdf.set_font("Helvetica", "", 10)
-                pdf.set_text_color(*_PDF_MID)
-                pdf.multi_cell(0, 6, safe_text(n["note"]))
-
+                pdf.set_font("Helvetica", "", 11)
+                pdf.set_text_color(*_PDF_WHITE)
+                # Subtle background for text
+                pdf.set_fill_color(*_PDF_SURFACE)
+                pdf.multi_cell(0, 7, f"Note: {safe_text(n['note'])}", border=0, align='L', fill=True)
+            
+            pdf.ln(10)
+            pdf.set_draw_color(*_PDF_BORDER)
+            pdf.line(15, pdf.get_y(), 195, pdf.get_y())
             pdf.ln(8)
-            pdf.set_draw_color(*_PDF_FADED)
-            pdf.line(20, pdf.get_y(), 190, pdf.get_y())
-            pdf.ln(5)
 
     buf = io.BytesIO()
     pdf.output(buf)
@@ -278,10 +355,23 @@ def export_md():
     for n in notes:
         grouped.setdefault(n.get("video_title", "General"), []).append(n)
     for title, vnotes in grouped.items():
-        lines.append(f"## {title}")
+        video_url = vnotes[0].get("video_url", "")
+        if video_url:
+            lines.append(f"## [{title}]({video_url})")
+        else:
+            lines.append(f"## {title}")
         lines.append("")
         for n in vnotes:
-            lines.append(f"### `{n.get('timestamp', '00:00')}`")
+            ts = n.get('timestamp', '00:00')
+            v_url = n.get('video_url', '')
+            seconds = timestamp_to_seconds(ts)
+            deep_link = f"{v_url}&t={seconds}" if v_url else ""
+            
+            if deep_link:
+                lines.append(f"### [`{ts}`]({deep_link})")
+            else:
+                lines.append(f"### `{ts}`")
+                
             if n.get("note"):
                 lines.append("")
                 lines.append(n["note"])

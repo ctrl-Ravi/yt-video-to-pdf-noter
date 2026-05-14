@@ -420,6 +420,125 @@ function getVideoTitle() {
 }
 function formatTime(s) { s = Math.floor(s || 0); return `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`; }
 
+function ytnGetSeconds(ts) {
+  if (!ts) return 0;
+  const parts = ts.split(':').map(Number);
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  return parts[0] * 60 + parts[1];
+}
+
+async function ytnExportMD() {
+  if (!notes.length) { alert("No notes to export."); return; }
+  let md = `# YT Noter Pro — Study Notes\n\n`;
+  md += `**Notebook:** ${currentNotebook}  \n`;
+  md += `**Exported:** ${new Date().toLocaleString()}  \n\n---\n\n`;
+
+  const grouped = {};
+  notes.forEach(n => {
+    const vTitle = n.video_title || "General Session";
+    if (!grouped[vTitle]) grouped[vTitle] = [];
+    grouped[vTitle].push(n);
+  });
+
+  for (const [vTitle, vnotes] of Object.entries(grouped)) {
+    const videoUrl = vnotes[0].video_url || "";
+    md += `## [${vTitle}](${videoUrl})\n\n`;
+    vnotes.forEach(n => {
+      const seconds = ytnGetSeconds(n.timestamp);
+      const deepLink = `${n.video_url}&t=${seconds}`;
+      md += `### [\`${n.timestamp}\`](${deepLink})\n\n`;
+      if (n.note) md += `${n.note}\n\n`;
+      md += `---\n\n`;
+    });
+  }
+
+  const blob = new Blob([md], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${currentNotebook.replace(/\s+/g, '_')}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+  hasExported = true;
+}
+
+async function ytnExportPDF() {
+  if (!notes.length) { alert("No notes to export."); return; }
+  // We assume html2pdf is available (e.g. loaded via a script tag or similar)
+  // If not, we fall back to a simple alert or use a CDN if allowed.
+  if (typeof html2pdf === 'undefined') {
+    const confirmed = confirm("The 'html2pdf' library is required for PDF export. Would you like to attempt loading it from a CDN?");
+    if (confirmed) {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      script.onload = () => ytnExportPDF();
+      document.head.appendChild(script);
+      return;
+    }
+    return;
+  }
+
+  const container = document.createElement("div");
+  container.style.padding = "40px";
+  container.style.background = "#020817";
+  container.style.color = "#FFFFFF";
+  container.style.fontFamily = "Arial, sans-serif";
+
+  let html = `<h1 style="text-align:center; color:#FFFFFF; margin-bottom:10px;">YT NOTER PRO</h1>`;
+  html += `<p style="text-align:center; color:#5B6CFF; font-weight:bold; margin-bottom:5px; text-transform:uppercase;">NOTEBOOK: ${currentNotebook}</p>`;
+  html += `<p style="text-align:center; color:#3B475D; font-size:12px; margin-bottom:30px;">Generated ${new Date().toLocaleString()}</p>`;
+
+  const grouped = {};
+  notes.forEach(n => {
+    const vTitle = n.video_title || "General Session";
+    if (!grouped[vTitle]) grouped[vTitle] = [];
+    grouped[vTitle].push(n);
+  });
+
+  for (const [vTitle, vnotes] of Object.entries(grouped)) {
+    const videoUrl = vnotes[0].video_url || "";
+    html += `
+      <div style="border-left: 4px solid #5B6CFF; background: #071226; padding: 15px; margin-bottom: 20px;">
+        <h2 style="margin:0;"><a href="${videoUrl}" style="color:#5B6CFF; text-decoration:underline;">${vTitle}</a></h2>
+      </div>
+    `;
+
+    vnotes.forEach(n => {
+      const seconds = ytnGetSeconds(n.timestamp);
+      const deepLink = `${n.video_url}&t=${seconds}`;
+      html += `
+        <div style="margin-bottom: 25px; border-bottom: 1px solid #13203A; padding-bottom: 15px;">
+          <p style="margin:0 0 10px 0;">
+            <a href="${deepLink}" style="color:#5B6CFF; font-weight:bold; text-decoration:underline;">@ ${n.timestamp}</a>
+          </p>
+      `;
+
+      if (n.image_path) {
+        html += `<img src="${BACKEND}/screenshot/${encodeURIComponent(n.image_path)}" style="width:100%; max-width:600px; border-radius:8px; margin-bottom:15px; border: 1px solid #13203A;">`;
+      }
+
+      if (n.note) {
+        html += `<p style="color:#8A97B0; line-height:1.6; margin:0;">${n.note.replace(/\n/g, '<br>')}</p>`;
+      }
+
+      html += `</div>`;
+    });
+  }
+
+  container.innerHTML = html;
+  
+  const opt = {
+    margin: 10,
+    filename: `${currentNotebook.replace(/\s+/g, '_')}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, backgroundColor: '#020817' },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  html2pdf().set(opt).from(container).save();
+  hasExported = true;
+}
+
 async function ytnSnap(autoSave = false) {
   const v = getVideo(); if (!v) return;
   
