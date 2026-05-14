@@ -14,6 +14,10 @@
 - **SNAP (Instant Capture)**: Manual high-resolution snapshots with a single click or `Alt+S`.
 - **LIVE (Auto-Snap)**: Set a custom interval (e.g., 30s) and let the engine document the video automatically with a breathing pulse animation.
 - **SCAN (Deep Skimmer)**: Deep-scan entire videos in seconds to create a visual index.
+- **You can take screeshot during fullscreen view mode**
+<img width="270" height="142" alt="image" src="https://github.com/user-attachments/assets/36b7945d-0c53-4c48-9a5a-3e8a651efc72" />
+<img width="214" height="93" alt="image" src="https://github.com/user-attachments/assets/41e6136d-0397-4cf4-b4cd-b001fe6233f1" />
+
 
 ### 🌑 Noir Design System
 - **Midnight Aesthetic**: Deep charcoal theme (`#0b0e14`) with neon blue accents.
@@ -31,6 +35,17 @@
 
 ### 1. Backend Setup
 ```bash
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+
+# Windows (PowerShell)
+venv\Scripts\Activate.ps1
+
+# Windows (CMD)
+venv\Scripts\activate.bat
+
 cd backend
 pip install -r requirements.txt
 python app.py
