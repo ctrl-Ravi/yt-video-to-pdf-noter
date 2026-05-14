@@ -5,5 +5,7 @@ __pycache__/
 .vscode/
 screenshots/
 notes.json
+notes.db
 backend/screenshots/
 backend/notes.json
+backend/notes.db

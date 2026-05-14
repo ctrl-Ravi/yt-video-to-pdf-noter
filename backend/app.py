@@ -1,4 +1,4 @@
-import os, json, datetime, io, base64, uuid, re
+import os, json, datetime, io, base64, uuid, re, sqlite3
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from fpdf import FPDF
@@ -8,9 +8,31 @@ from PIL import Image
 app = Flask(__name__)
 CORS(app)
 
-DB_PATH = "notes.json"
+DB_PATH = "notes.db"
 IMG_DIR = "screenshots"
 if not os.path.exists(IMG_DIR): os.makedirs(IMG_DIR)
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS notes
+                 (id TEXT PRIMARY KEY,
+                  notebook_name TEXT,
+                  video_title TEXT,
+                  video_url TEXT,
+                  timestamp TEXT,
+                  note TEXT,
+                  image_path TEXT,
+                  created_at TEXT)''')
+    conn.commit()
+    conn.close()
+
+init_db()
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def safe_text(text):
     """Strip characters unsupported by FPDF's built-in latin-1 fonts."""
@@ -35,26 +57,26 @@ def timestamp_to_seconds(ts):
     except: return 0
 
 def load_notes():
-    if not os.path.exists(DB_PATH): return []
-    with open(DB_PATH, "r") as f: return json.load(f)
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT * FROM notes')
+    rows = c.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
-def save_notes(notes):
-    with open(DB_PATH, "w") as f: json.dump(notes, f, indent=2)
-
-def save_image(b64_data):
-    if not b64_data: return None
+def save_image(image_file):
+    if not image_file: return None
     try:
-        if "," in b64_data: b64_data = b64_data.split(",")[1]
-        img_data = base64.b64decode(b64_data)
         fname = f"{IMG_DIR}/{uuid.uuid4()}.png"
-        with open(fname, "wb") as f: f.write(img_data)
+        image_file.save(fname)
         return fname
     except: return None
 
 @app.route("/save", methods=["POST"])
 def save():
-    data = request.json
-    img_path = save_image(data.get("image", ""))
+    data = request.form
+    image_file = request.files.get("image")
+    img_path = save_image(image_file)
     entry = {
         "id": str(uuid.uuid4()),
         "notebook_name": clean_title(data.get("notebook_name", "General Session")),
@@ -65,31 +87,46 @@ def save():
         "image_path": img_path,
         "created_at": datetime.datetime.now().isoformat()
     }
-    notes = load_notes()
-    notes.append(entry)
-    save_notes(notes)
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''INSERT INTO notes (id, notebook_name, video_title, video_url, timestamp, note, image_path, created_at)
+                 VALUES (:id, :notebook_name, :video_title, :video_url, :timestamp, :note, :image_path, :created_at)''', 
+              entry)
+    conn.commit()
+    conn.close()
     return jsonify({"status": "saved", "entry": entry})
 
 @app.route("/notebooks")
 def get_notebooks():
-    notes = load_notes()
-    notebooks = sorted(set(n.get("notebook_name", "General Session") for n in notes))
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT DISTINCT notebook_name FROM notes')
+    rows = c.fetchall()
+    conn.close()
+    notebooks = sorted(set(row["notebook_name"] or "General Session" for row in rows))
     if "General Session" not in notebooks:
         notebooks.insert(0, "General Session")
     return jsonify(notebooks)
 
 @app.route("/notes")
 def get_notes():
-    notes = load_notes()
     url = request.args.get("video_url")
     notebook_name = request.args.get("notebook_name")
     
+    conn = get_db()
+    c = conn.cursor()
+    
     if notebook_name:
-        notes = [n for n in notes if n.get("notebook_name", "General Session") == notebook_name]
+        c.execute('SELECT * FROM notes WHERE notebook_name = ?', (notebook_name,))
     elif url:
-        notes = [n for n in notes if n.get("video_url") == url]
+        c.execute('SELECT * FROM notes WHERE video_url = ?', (url,))
+    else:
+        c.execute('SELECT * FROM notes')
         
-    return jsonify(notes)
+    rows = c.fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in rows])
 
 @app.route("/delete", methods=["POST"])
 def delete_single():
@@ -97,15 +134,20 @@ def delete_single():
     note_id = data.get("id")
     if not note_id:
         return jsonify({"error": "Missing id"}), 400
-    notes = load_notes()
-    new_notes = []
-    for n in notes:
-        if n["id"] == note_id:
-            if n.get("image_path") and os.path.exists(n["image_path"]):
-                try: os.remove(n["image_path"])
-                except: pass
-        else: new_notes.append(n)
-    save_notes(new_notes)
+        
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Get image path before deleting
+    c.execute('SELECT image_path FROM notes WHERE id = ?', (note_id,))
+    row = c.fetchone()
+    if row and row["image_path"] and os.path.exists(row["image_path"]):
+        try: os.remove(row["image_path"])
+        except: pass
+        
+    c.execute('DELETE FROM notes WHERE id = ?', (note_id,))
+    conn.commit()
+    conn.close()
     return jsonify({"status": "deleted"})
 
 @app.route("/delete_all", methods=["POST"])
@@ -113,36 +155,48 @@ def delete_all():
     data = request.json or {}
     video_url = data.get("video_url")
     notebook_name = data.get("notebook_name")
-    notes = load_notes()
-    remains = []
     
-    for n in notes:
-        # If notebook_name is provided, delete notes for that notebook
-        if notebook_name:
-            if n.get("notebook_name", "General Session") == notebook_name:
-                if n.get("image_path") and os.path.exists(n["image_path"]):
-                    try: os.remove(n["image_path"])
-                    except: pass
-            else: remains.append(n)
-        # If video_url is provided, only delete notes for that video
-        elif video_url:
-            if n.get("video_url") == video_url:
-                if n.get("image_path") and os.path.exists(n["image_path"]):
-                    try: os.remove(n["image_path"])
-                    except: pass
-            else: remains.append(n)
-        else:
-            # Master Clear: Delete all images
-            if n.get("image_path") and os.path.exists(n["image_path"]):
-                try: os.remove(n["image_path"])
-                except: pass
+    conn = get_db()
+    c = conn.cursor()
     
-    save_notes(remains)
-    return jsonify({"status": "cleared", "total": len(remains)})
+    # Need to delete images first
+    if notebook_name:
+        c.execute('SELECT image_path FROM notes WHERE notebook_name = ?', (notebook_name,))
+    elif video_url:
+        c.execute('SELECT image_path FROM notes WHERE video_url = ?', (video_url,))
+    else:
+        c.execute('SELECT image_path FROM notes')
+        
+    rows = c.fetchall()
+    for row in rows:
+        if row and row["image_path"] and os.path.exists(row["image_path"]):
+            try: os.remove(row["image_path"])
+            except: pass
+            
+    if notebook_name:
+        c.execute('DELETE FROM notes WHERE notebook_name = ?', (notebook_name,))
+    elif video_url:
+        c.execute('DELETE FROM notes WHERE video_url = ?', (video_url,))
+    else:
+        c.execute('DELETE FROM notes')
+        
+    conn.commit()
+    
+    # Get remaining count
+    c.execute('SELECT COUNT(*) FROM notes')
+    total = c.fetchone()[0]
+    conn.close()
+    
+    return jsonify({"status": "cleared", "total": total})
 
 @app.route("/screenshot/<path:filepath>")
 def serve_screenshot(filepath):
-    if os.path.exists(filepath): return send_file(filepath, mimetype="image/png")
+    # Prevent Path Traversal by extracting only the filename
+    safe_filename = os.path.basename(filepath)
+    safe_path = os.path.join(IMG_DIR, safe_filename)
+    
+    if os.path.exists(safe_path) and os.path.isfile(safe_path):
+        return send_file(safe_path, mimetype="image/png")
     return jsonify({"error": "Not found"}), 404
 
 # ── Design tokens (exact dark navy fintech palette) ──────────────────────────
@@ -205,7 +259,7 @@ def export_pdf():
     # Subtitle
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_text_color(59, 130, 246) # #3B82F6 Blue
-    pdf.cell(0, 5, "STUDY DOCUMENTATION ENGINE", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+    pdf.cell(0, 5, "PRECISION KNOWLEDGE CAPTURE", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
     
     # ── Pro Ribbon Stats (Minimalist) ───────────────────────────────────────
     pdf.ln(1)
