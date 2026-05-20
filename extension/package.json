@@ -1,5 +1,18 @@
 {
   "name": "@yt-noter-pro/extension",
   "version": "1.0.0",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "@yt-noter-pro/shared-types": "workspace:*",
+    "dexie": "^3.2.7",
+    "dexie-react-hooks": "^4.4.0"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^29.1.1",
+    "vitest": "^4.1.7"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
 }
