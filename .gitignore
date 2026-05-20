@@ -1,11 +1,42 @@
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Python
 venv/
+.venv/
+env/
 __pycache__/
 *.pyc
+*.py[cod]
+*$py.class
+
+# Secrets
 .env
+
+# Build Output
+dist/
+build/
+.wxt/
+.output/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific (from original prototype)
 screenshots/
 notes.json
 notes.db
 backend/screenshots/
 backend/notes.json
 backend/notes.db
+implementation.md
