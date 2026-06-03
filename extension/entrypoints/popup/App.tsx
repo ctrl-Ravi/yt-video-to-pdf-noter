@@ -1,11 +1,4 @@
-import React from 'react';
+// App.tsx is intentionally empty.
+// The popup is bootstrapped directly from main.tsx.
+export {};
 
-function App() {
-  return (
-    <div>
-      YT Noter Pro loading.
-    </div>
-  );
-}
-
-export default App;
