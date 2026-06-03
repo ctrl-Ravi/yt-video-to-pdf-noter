@@ -7,17 +7,21 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/src/components/ui/ta
 import { NoteEditor } from '@/src/components/editor/NoteEditor';
 import { CaptureButton } from '@/src/components/editor/CaptureButton';
 import { useAutoSnap } from '@/src/hooks/useAutoSnap';
+import { useSaveNote } from '@/src/hooks/useSaveNote';
 
 // ---------------------------------------------------------------------------
 // Placeholder panels – replaced by real panels in later phases
 // ---------------------------------------------------------------------------
 function SessionPanel() {
   const { pendingCapture, setPendingCapture } = useSidebarStore();
+  const { saveNote } = useSaveNote();
 
-  const handleSave = (value: { title: string; body: string; screenshotBlob: Blob | null }) => {
-    // Phase 5.3 will wire this to Dexie
-    console.log('Save note:', value);
-    setPendingCapture(null);
+  const handleSave = async (value: { title: string; body: string; screenshotBlob: Blob | null }) => {
+    try {
+      await saveNote(value);
+    } catch (err) {
+      console.error('SessionPanel: failed to save note', err);
+    }
   };
 
   return (
