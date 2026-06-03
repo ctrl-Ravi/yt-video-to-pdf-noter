@@ -4,15 +4,28 @@ import { useSidebarStore } from '@/src/store/sidebar';
 import { DragHandle } from './DragHandle';
 import { Header } from './Header';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/src/components/ui/tabs';
+import { NoteEditor } from '@/src/components/editor/NoteEditor';
+import { CaptureButton } from '@/src/components/editor/CaptureButton';
+import { useAutoSnap } from '@/src/hooks/useAutoSnap';
 
 // ---------------------------------------------------------------------------
 // Placeholder panels – replaced by real panels in later phases
 // ---------------------------------------------------------------------------
-function SessionPanelPlaceholder() {
+function SessionPanel() {
+  const { pendingCapture, setPendingCapture } = useSidebarStore();
+
+  const handleSave = (value: { title: string; body: string; screenshotBlob: Blob | null }) => {
+    // Phase 5.3 will wire this to Dexie
+    console.log('Save note:', value);
+    setPendingCapture(null);
+  };
+
   return (
-    <div className="flex h-full items-center justify-center text-sm text-muted-foreground select-none">
-      Session panel – coming soon
-    </div>
+    <NoteEditor
+      pendingScreenshot={pendingCapture?.result.thumbnailBlob ?? null}
+      timestampLabel={pendingCapture?.timestampLabel}
+      onSave={handleSave}
+    />
   );
 }
 
@@ -36,7 +49,10 @@ interface LayoutProps {
 export function Layout({ onDragDown, onDragMove, onDragUp }: LayoutProps) {
   const { activeTab, setActiveTab, isCompact } = useSidebarStore();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isMini, setIsMini] = useState(false);      // fullscreen mini-mode
+  const [isMini, setIsMini] = useState(false);
+
+  // Start auto-snap listener
+  useAutoSnap();
 
   // ---- Fullscreen listener ----
   useEffect(() => {
@@ -93,7 +109,7 @@ export function Layout({ onDragDown, onDragMove, onDragUp }: LayoutProps) {
           </TabsList>
 
           <TabsContent value="session" className="flex-1 overflow-auto m-0 p-0">
-            <SessionPanelPlaceholder />
+            <SessionPanel />
           </TabsContent>
           <TabsContent value="manager" className="flex-1 overflow-auto m-0 p-0">
             <ManagerPanelPlaceholder />

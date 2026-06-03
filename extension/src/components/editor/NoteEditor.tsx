@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, X, Save, Check } from 'lucide-react';
+import { X, Save, Check } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
-import { Input } from '@/src/components/ui/input';
 import { cn } from '@/src/lib/utils';
 import { useSidebarStore } from '@/src/store/sidebar';
+import { CaptureButton } from './CaptureButton';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,10 +25,6 @@ interface NoteEditorProps {
   timestampLabel?: string;
   /** Called when the user clicks Save */
   onSave: (value: NoteEditorValue) => void;
-  /** Called when the user clicks Capture Screenshot */
-  onCaptureRequest: () => void;
-  /** Whether a capture is currently in progress */
-  isCapturing?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -48,8 +44,6 @@ export function NoteEditor({
   pendingScreenshot = null,
   timestampLabel,
   onSave,
-  onCaptureRequest,
-  isCapturing = false,
 }: NoteEditorProps) {
   const { autoSnapEnabled } = useSidebarStore();
 
@@ -189,17 +183,7 @@ export function NoteEditor({
         </Button>
 
         {/* Capture button */}
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 text-xs gap-1.5"
-          onClick={onCaptureRequest}
-          disabled={isCapturing}
-          title="Capture screenshot from video"
-        >
-          <Camera className={cn('h-3.5 w-3.5', isCapturing && 'animate-pulse')} />
-          {isCapturing ? 'Capturing…' : 'Capture'}
-        </Button>
+        <CaptureButton size="sm" className="h-7 text-xs" />
 
         {/* Auto-snap indicator */}
         <span
