@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom/client';
 import '../src/content/index.css';
 import { detectPlatform } from '@/src/platform/detector';
 import { getDb } from '@/src/db/database';
+import { Shell } from '@/src/components/sidebar/Shell';
+import { useSidebarStore } from '@/src/store/sidebar';
 
 export default defineContentScript({
   matches: ['*://*.youtube.com/*'],
@@ -12,6 +14,7 @@ export default defineContentScript({
     // Initialize platform and DB once when script runs in browser
     detectPlatform();
     getDb();
+
     const ui = await createShadowRootUi(ctx, {
       name: 'yt-noter-pro-root',
       position: 'inline',
@@ -19,8 +22,11 @@ export default defineContentScript({
       append: 'last',
       onMount: (container) => {
         const root = ReactDOM.createRoot(container);
-        // Phase 3.4: Content script renders null (no visible elements yet)
-        root.render(null);
+        root.render(
+          <React.StrictMode>
+            <Shell />
+          </React.StrictMode>
+        );
         return root;
       },
       onRemove: (root) => {
@@ -28,5 +34,9 @@ export default defineContentScript({
       },
     });
     ui.mount();
+
+    // Open the sidebar by default so users see it immediately on first load.
+    // In later phases this will respect the user's saved isOpen preference.
+    useSidebarStore.getState().setIsOpen(true);
   },
 });
