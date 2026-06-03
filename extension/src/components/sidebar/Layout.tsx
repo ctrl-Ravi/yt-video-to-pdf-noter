@@ -8,12 +8,13 @@ import { NoteEditor } from '@/src/components/editor/NoteEditor';
 import { CaptureButton } from '@/src/components/editor/CaptureButton';
 import { useAutoSnap } from '@/src/hooks/useAutoSnap';
 import { useSaveNote } from '@/src/hooks/useSaveNote';
+import { SessionTimeline } from '@/src/components/timeline/SessionTimeline';
 
 // ---------------------------------------------------------------------------
 // Placeholder panels – replaced by real panels in later phases
 // ---------------------------------------------------------------------------
 function SessionPanel() {
-  const { pendingCapture, setPendingCapture } = useSidebarStore();
+  const { pendingCapture } = useSidebarStore();
   const { saveNote } = useSaveNote();
 
   const handleSave = async (value: { title: string; body: string; screenshotBlob: Blob | null }) => {
@@ -25,11 +26,18 @@ function SessionPanel() {
   };
 
   return (
-    <NoteEditor
-      pendingScreenshot={pendingCapture?.result.thumbnailBlob ?? null}
-      timestampLabel={pendingCapture?.timestampLabel}
-      onSave={handleSave}
-    />
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Editor – fixed height at top */}
+      <div className="shrink-0 border-b">
+        <NoteEditor
+          pendingScreenshot={pendingCapture?.result.thumbnailBlob ?? null}
+          timestampLabel={pendingCapture?.timestampLabel}
+          onSave={handleSave}
+        />
+      </div>
+      {/* Live timeline – fills remaining space */}
+      <SessionTimeline videoUrl={window.location.href} />
+    </div>
   );
 }
 
